@@ -1,0 +1,171 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/schemas/shipment-tracking.json",
+  "$defs": {
+    "ShipmentStatus": {
+      "type": "string",
+      "enum": [
+        "created",
+        "label_printed",
+        "picked_up",
+        "in_transit",
+        "out_for_delivery",
+        "delivered",
+        "exception",
+        "returned",
+        "cancelled"
+      ],
+      "description": "Lifecycle state of a shipment."
+    },
+
+    "Address": {
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "line1": { "type": "string" },
+        "line2": { "type": "string" },
+        "city": { "type": "string" },
+        "state": { "type": "string" },
+        "postalCode": { "type": "string" },
+        "country": {
+          "type": "string",
+          "description": "ISO 3166-1 alpha-2 country code",
+          "pattern": "^[A-Z]{2}$"
+        }
+      },
+      "required": ["line1", "city", "country"],
+      "additionalProperties": false
+    },
+
+    "GeoPoint": {
+      "type": "object",
+      "properties": {
+        "lat": { "type": "number", "minimum": -90, "maximum": 90 },
+        "lng": { "type": "number", "minimum": -180, "maximum": 180 }
+      },
+      "required": ["lat", "lng"],
+      "additionalProperties": false
+    },
+
+    "Carrier": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "string",
+          "description": "Short carrier code, e.g. UPS, FEDEX, USPS, DHL"
+        },
+        "name": { "type": "string" }
+      },
+      "required": ["code"],
+      "additionalProperties": false
+    },
+
+    "TrackingEvent": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "format": "uuid" },
+        "shipmentId": { "type": "string", "format": "uuid" },
+        "status": { "$ref": "#/$defs/ShipmentStatus" },
+        "description": {
+          "type": "string",
+          "description": "Human-readable detail, e.g. 'Departed facility'"
+        },
+        "location": {
+          "type": "object",
+          "properties": {
+            "city": { "type": "string" },
+            "state": { "type": "string" },
+            "country": { "type": "string" },
+            "geo": { "$ref": "#/$defs/GeoPoint" }
+          },
+          "additionalProperties": false
+        },
+        "occurredAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When the event happened, per the carrier"
+        },
+        "recordedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When our system ingested the event"
+        },
+        "source": {
+          "type": "string",
+          "enum": ["carrier_webhook", "carrier_poll", "manual"],
+          "default": "carrier_poll"
+        }
+      },
+      "required": ["id", "shipmentId", "status", "occurredAt"],
+      "additionalProperties": false
+    },
+
+    "Shipment": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "format": "uuid" },
+        "trackingNumber": { "type": "string" },
+        "carrier": { "$ref": "#/$defs/Carrier" },
+        "status": { "$ref": "#/$defs/ShipmentStatus" },
+        "origin": { "$ref": "#/$defs/Address" },
+        "destination": { "$ref": "#/$defs/Address" },
+        "weightKg": { "type": "number", "exclusiveMinimum": 0 },
+        "estimatedDelivery": { "type": "string", "format": "date-time" },
+        "actualDelivery": { "type": "string", "format": "date-time" },
+        "events": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/TrackingEvent" },
+          "description": "Ordered oldest-to-newest event history"
+        },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "trackingNumber", "carrier", "status", "destination", "createdAt"],
+      "additionalProperties": false
+    },
+
+    "CarrierWebhookEvent": {
+      "type": "object",
+      "description": "Normalized shape after mapping a carrier's native webhook body. Carriers differ wildly in their raw formats, so ingestion handlers translate into this before processing; 'raw' preserves the original payload for debugging/replay.",
+      "properties": {
+        "trackingNumber": { "type": "string" },
+        "carrierCode": { "type": "string" },
+        "carrierStatus": {
+          "type": "string",
+          "description": "Carrier's own status string, pre-mapping"
+        },
+        "status": {
+          "$ref": "#/$defs/ShipmentStatus",
+          "description": "Our status after mapping carrierStatus"
+        },
+        "description": { "type": "string" },
+        "location": {
+          "type": "object",
+          "properties": {
+            "city": { "type": "string" },
+            "state": { "type": "string" },
+            "country": { "type": "string" }
+          },
+          "additionalProperties": false
+        },
+        "occurredAt": { "type": "string", "format": "date-time" },
+        "raw": {
+          "type": "object",
+          "description": "Original, untransformed carrier payload"
+        }
+      },
+      "required": ["trackingNumber", "carrierCode", "status", "occurredAt"],
+      "additionalProperties": false
+    },
+
+    "Error": {
+      "type": "object",
+      "properties": {
+        "code": { "type": "string" },
+        "message": { "type": "string" }
+      },
+      "required": ["code", "message"],
+      "additionalProperties": false
+    }
+  }
+}

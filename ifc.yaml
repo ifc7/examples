@@ -1,0 +1,8 @@
+use: []
+own:
+    - name: schemas
+      ref: ifc7.dev/i/quickship-inc/schemas
+      path: ./api/schemas.json
+    - name: shipping-api
+      ref: ifc7.dev/i/quickship-inc/shipping-api
+      path: ./api/shipping-status.yaml

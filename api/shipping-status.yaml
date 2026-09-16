@@ -1,0 +1,220 @@
+openapi: 3.1.0
+info:
+  title: Shipment Tracking API
+  version: "1.0.0"
+  description: >
+    Minimal API for creating shipments, recording carrier tracking events,
+    and querying current status / history.
+
+servers:
+  - url: https://api.example.com/v1
+
+paths:
+  /shipments:
+    post:
+      summary: Create a shipment
+      operationId: createShipment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                trackingNumber: { type: string }
+                carrier:
+                  $ref: 'schemas.json#/$defs/Carrier'
+                origin:
+                  $ref: 'schemas.json#/$defs/Address'
+                destination:
+                  $ref: 'schemas.json#/$defs/Address'
+                weightKg: { type: number }
+                estimatedDelivery: { type: string, format: date-time }
+              required: [trackingNumber, carrier, destination]
+      responses:
+        '201':
+          description: Shipment created
+          content:
+            application/json:
+              schema:
+                $ref: 'schemas.json#/$defs/Shipment'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+    get:
+      summary: List / search shipments
+      operationId: listShipments
+      parameters:
+        - name: trackingNumber
+          in: query
+          schema: { type: string }
+        - name: status
+          in: query
+          schema:
+            $ref: 'schemas.json#/$defs/ShipmentStatus'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: A page of shipments
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: 'schemas.json#/$defs/Shipment'
+                  pageInfo:
+                    $ref: '#/components/schemas/PageInfo'
+                required: [items, pageInfo]
+  /shipments/{shipmentId}:
+    parameters:
+      - name: shipmentId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+
+    get:
+      summary: Get a shipment, including its event history
+      operationId: getShipment
+      responses:
+        '200':
+          description: Shipment found
+          content:
+            application/json:
+              schema:
+                $ref: 'schemas.json#/$defs/Shipment'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    patch:
+      summary: Update mutable shipment fields (e.g. status correction, ETA)
+      operationId: updateShipment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status:
+                  $ref: 'schemas.json#/$defs/ShipmentStatus'
+                estimatedDelivery: { type: string, format: date-time }
+                actualDelivery: { type: string, format: date-time }
+      responses:
+        '200':
+          description: Updated shipment
+          content:
+            application/json:
+              schema:
+                $ref: 'schemas.json#/$defs/Shipment'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /shipments/{shipmentId}/events:
+    parameters:
+      - name: shipmentId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+
+    get:
+      summary: List tracking events for a shipment, oldest first
+      operationId: listTrackingEvents
+      responses:
+        '200':
+          description: Event history
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: 'schemas.json#/$defs/TrackingEvent'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    post:
+      summary: Append a tracking event (carrier webhook or manual entry)
+      operationId: createTrackingEvent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status:
+                  $ref: 'schemas.json#/$defs/ShipmentStatus'
+                description: { type: string }
+                location:
+                  type: object
+                  properties:
+                    city: { type: string }
+                    state: { type: string }
+                    country: { type: string }
+                occurredAt: { type: string, format: date-time }
+                source:
+                  type: string
+                  enum: [carrier_webhook, carrier_poll, manual]
+              required: [status, occurredAt]
+      responses:
+        '201':
+          description: Event recorded; shipment.status is updated to match
+          content:
+            application/json:
+              schema:
+                $ref: 'schemas.json#/$defs/TrackingEvent'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+components:
+  parameters:
+    Limit:
+      name: limit
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+    Cursor:
+      name: cursor
+      in: query
+      description: Opaque cursor from a previous page's pageInfo.nextCursor
+      schema: { type: string }
+  schemas:
+    PageInfo:
+      type: object
+      properties:
+        nextCursor:
+          type: string
+          nullable: true
+          description: Pass as `cursor` to fetch the next page; null/absent on the last page
+        hasMore:
+          type: boolean
+      required: [hasMore]
+  responses:
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: 'schemas.json#/$defs/Error'
+    BadRequest:
+      description: Invalid request payload
+      content:
+        application/json:
+          schema:
+            $ref: 'schemas.json#/$defs/Error'
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    webhookSignature:
+      type: apiKey
+      in: header
+      name: X-Webhook-Signature
+      description: >-
+        HMAC-SHA256 of the raw request body, signed with a per-carrier
+        shared secret. Not a real API key scheme, but the closest fit for
+        documenting a header-based signature check in OpenAPI.
+security:
+  - bearerAuth: []
