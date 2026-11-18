@@ -23,7 +23,7 @@ paths:
               properties:
                 trackingNumber: { type: string }
                 carrier:
-                  $ref: 'schemas.json#/$defs/Carrier'
+                  $ref: 'ifc7.dev/i/quickship-inc/schemas#/$defs/Carrier'
                 origin:
                   $ref: 'schemas.json#/$defs/Address'
                 destination:
