@@ -1,0 +1,19 @@
+name: Push interfaces
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: [ifc.yaml, api/**]
+permissions:
+  contents: read
+  id-token: write
+concurrency: ifc7-push
+jobs:
+  push:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ifc7/ifc-action@main # until v1 is tagged
+        with:
+          organization: quickship-inc
+          hub-url: https://dev.ifc7.dev
